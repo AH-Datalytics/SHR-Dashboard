@@ -325,6 +325,8 @@
           <span class="btn-group" id="trendRate">
             <button class="active" data-v="count">Count</button>
             <button data-v="rate" title="Victims per 100,000 reporting population">Rate</button>
+            <button data-v="pctchg" title="Year-over-year % change">% Chg</button>
+            <button data-v="pctchg_rate" title="Year-over-year % change in rate per 100K">% Chg (Rate)</button>
           </span>
         </span>
       </h3>
@@ -753,11 +755,12 @@ function render() {
   // Show/hide lag toggle
   document.getElementById('trendLag').style.display = (isMonthly || isRolling) ? 'inline-flex' : 'none';
   const useLag = (isMonthly || isRolling) && f.lag === 'lag';
-  const useRate = f.rate === 'rate';
+  const useRate = f.rate === 'rate' || f.rate === 'pctchg_rate';
+  const usePctChg = f.rate === 'pctchg' || f.rate === 'pctchg_rate';
 
   // Rate mode: disable when state/agency filter active (no per-agency population breakdown in rate data)
   const canRate = isAllStates && isAllAgencies && f.type === 'ALL' || isConsistent;
-  document.querySelectorAll('#trendRate button[data-v="rate"]').forEach(btn => {
+  document.querySelectorAll('#trendRate button[data-v="rate"], #trendRate button[data-v="pctchg_rate"]').forEach(btn => {
     btn.disabled = !canRate;
     btn.style.opacity = canRate ? '1' : '0.5';
     btn.style.cursor = canRate ? 'pointer' : 'not-allowed';
@@ -765,7 +768,8 @@ function render() {
   const popSource = isConsistent ? (CS.populationByYear || {}) : (DATA.populationByYear || {});
 
   document.getElementById('trend-title').textContent =
-    isRolling ? 'Rolling 12-Month Trend' : isMonthly ? 'Monthly Trend' : 'Annual Trend';
+    usePctChg ? (isRolling || isMonthly ? 'YoY % Change (Monthly)' : 'Year-over-Year % Change')
+    : isRolling ? 'Rolling 12-Month Trend' : isMonthly ? 'Monthly Trend' : 'Annual Trend';
 
   // Yearly victim data (always computed for stats)
   let yearlyVictimData;
@@ -877,6 +881,22 @@ function render() {
     }
   }
 
+  // Year-over-year % change (applied after rate conversion if pctchg_rate)
+  if (usePctChg && !(isMonthly || isRolling)) {
+    const base = trendData.slice();
+    trendData = base.map((v, i) => {
+      if (i === 0 || v == null || base[i - 1] == null || base[i - 1] === 0) return null;
+      return +(((v - base[i - 1]) / base[i - 1]) * 100).toFixed(1);
+    });
+  } else if (usePctChg && (isMonthly || isRolling)) {
+    // For monthly/rolling: compare to same index 12 months prior
+    const base = trendData.slice();
+    trendData = base.map((v, i) => {
+      if (i < 12 || v == null || base[i - 12] == null || base[i - 12] === 0) return null;
+      return +(((v - base[i - 12]) / base[i - 12]) * 100).toFixed(1);
+    });
+  }
+
   const victimTotal = yearlyVictimData.reduce((s, v) => s + v, 0);
   const peakIdx = yearlyVictimData.indexOf(Math.max(...yearlyVictimData));
   const peakYear = years[peakIdx];
@@ -931,7 +951,9 @@ function render() {
   }
   if (f.type !== 'ALL') subtitle += ` — ${f.type} only`;
   if (useLag) subtitle += ' (4-mo lag)';
-  if (useRate && canRate) subtitle += ' — Rate per 100K';
+  if (usePctChg && f.rate === 'pctchg_rate') subtitle += ' — YoY % Change (Rate)';
+  else if (usePctChg) subtitle += ' — YoY % Change';
+  else if (useRate && canRate) subtitle += ' — Rate per 100K';
 
   // Stats
   document.getElementById('stat-total').textContent = fmt(incidentTotal);
@@ -941,15 +963,28 @@ function render() {
   document.getElementById('trend-subtitle').textContent = subtitle;
 
   // ── Trend chart ──
-  const useLineChart = isMonthly || isRolling;
+  const useLineChart = (isMonthly || isRolling) && !usePctChg;
+  const pctChgColors = usePctChg ? trendData.map(v => v == null ? '#ccc' : v >= 0 ? COLORS.red + 'CC' : COLORS.green + 'CC') : null;
+  const pctChgHover = usePctChg ? trendData.map(v => v == null ? '#ccc' : v >= 0 ? COLORS.red : COLORS.green) : null;
+
+  let dsLabel;
+  if (usePctChg) dsLabel = f.rate === 'pctchg_rate' ? 'YoY % Change (Rate)' : 'YoY % Change';
+  else if (useRate && canRate) dsLabel = isRolling ? 'Rolling 12-Mo Rate per 100K' : 'Rate per 100K';
+  else dsLabel = isRolling ? 'Rolling 12-Mo Victims' : trendLabel;
+
   makeChart('chart-trend', {
-    type: useLineChart ? 'line' : 'bar',
+    type: (useLineChart) ? 'line' : 'bar',
     data: {
       labels: trendLabels,
       datasets: [{
-        label: (useRate && canRate) ? (isRolling ? 'Rolling 12-Mo Rate per 100K' : 'Rate per 100K') : (isRolling ? 'Rolling 12-Mo Victims' : trendLabel),
+        label: dsLabel,
         data: trendData,
-        ...(useLineChart ? {
+        ...(usePctChg ? {
+          backgroundColor: pctChgColors,
+          hoverBackgroundColor: pctChgHover,
+          borderRadius: 3,
+          borderSkipped: false,
+        } : useLineChart ? {
           borderColor: isRolling ? COLORS.red : COLORS.accent,
           backgroundColor: (isRolling ? COLORS.red : COLORS.accent) + '20',
           fill: true,
@@ -974,13 +1009,17 @@ function render() {
           ...TOOLTIP_OPTS,
           callbacks: {
             title: ctx => {
-              if (useLineChart && monthlyTooltips) {
+              if ((isMonthly || isRolling) && monthlyTooltips) {
                 return monthlyTooltips[ctx[0].dataIndex] || ctx[0].label;
               }
               return ctx[0].label;
             },
             label: ctx => {
               if (ctx.parsed.y == null) return null;
+              if (usePctChg) {
+                const sign = ctx.parsed.y >= 0 ? '+' : '';
+                return ` ${sign}${ctx.parsed.y.toFixed(1)}%`;
+              }
               if (useRate && canRate) {
                 return isRolling
                   ? ` ${ctx.parsed.y.toFixed(1)} per 100K (trailing 12 months)`
@@ -994,8 +1033,14 @@ function render() {
         }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => (useRate && canRate) ? v.toFixed(1) : fmt(v) } },
-        x: { ticks: { maxTicksLimit: useLineChart ? 40 : 25, maxRotation: 0 } }
+        y: {
+          beginAtZero: !usePctChg,
+          ticks: {
+            callback: v => usePctChg ? (v >= 0 ? '+' : '') + v.toFixed(0) + '%'
+              : (useRate && canRate) ? v.toFixed(1) : fmt(v)
+          }
+        },
+        x: { ticks: { maxTicksLimit: (isMonthly || isRolling) ? 40 : 25, maxRotation: 0 } }
       }
     }
   });
