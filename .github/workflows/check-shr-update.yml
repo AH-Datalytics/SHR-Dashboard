@@ -1,0 +1,63 @@
+name: Check SHR Data Update
+
+on:
+  schedule:
+    # Run on the 15th and 16th of every month at 10:00 UTC
+    - cron: '0 10 15,16 * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install better-sqlite3
+
+      - name: Check for SHR updates (current + previous year)
+        id: check
+        run: |
+          node scripts/check-update.js
+          echo "updated=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Exit if no changes
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "No data changes detected or error occurred. Exiting."
+          exit 0
+
+      - name: Re-parse SHR data
+        if: steps.check.outputs.updated == 'true'
+        run: node scripts/parse-shr.js
+
+      - name: Re-aggregate
+        if: steps.check.outputs.updated == 'true'
+        run: node scripts/aggregate.js
+
+      - name: Commit updated data
+        if: steps.check.outputs.updated == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/shr-*.zip data/shr-aggregated.json
+          git diff --cached --quiet && echo "No file changes to commit" && exit 0
+          git commit -m "Update SHR data ($(date +%Y-%m-%d))"
+          git push
+
+      - name: Deploy to Vercel
+        if: steps.check.outputs.updated == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm i -g vercel
+          vercel --prod --yes --token=$VERCEL_TOKEN

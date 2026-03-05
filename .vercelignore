@@ -1,0 +1,7 @@
+data/shr.db
+data/kaplan/
+data/*.zip
+scripts/
+node_modules/
+.git/
+.github/

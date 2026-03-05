@@ -1,0 +1,6 @@
+.vercel
+node_modules/
+data/shr.db
+data/shr.db-wal
+data/shr.db-shm
+data/kaplan/
