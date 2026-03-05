@@ -262,6 +262,20 @@ const byMonthYearVictims = query(`
   GROUP BY i.month, i.year ORDER BY i.month, i.year
 `);
 
+// 31b. Victims by month + year + homicide type (national, for type-filtered monthly view)
+const byMonthYearVictimsMurder = query(`
+  SELECT i.month as m, i.year, COUNT(*) as n
+  FROM victims v JOIN incidents i ON v.incident_id = i.id
+  WHERE i.month BETWEEN 1 AND 12 AND i.homicide_type = 'Murder'
+  GROUP BY i.month, i.year ORDER BY i.month, i.year
+`);
+const byMonthYearVictimsManslaughter = query(`
+  SELECT i.month as m, i.year, COUNT(*) as n
+  FROM victims v JOIN incidents i ON v.incident_id = i.id
+  WHERE i.month BETWEEN 1 AND 12 AND i.homicide_type = 'Manslaughter'
+  GROUP BY i.month, i.year ORDER BY i.month, i.year
+`);
+
 // ── Population by year (distinct ORI populations) ──
 const populationByYear = query(`
   SELECT year, SUM(pop) as total_pop, COUNT(*) as agencies
@@ -649,6 +663,8 @@ const data = {
   byAgencyVictims: pivot(byAgencyYearVictims, 'ori'),
   byHomicideTypeVictims: pivot(byHomicideTypeVictims, 't'),
   byMonthVictims: pivot(byMonthYearVictims, 'm'),
+  byMonthVictimsMurder: pivot(byMonthYearVictimsMurder, 'm'),
+  byMonthVictimsManslaughter: pivot(byMonthYearVictimsManslaughter, 'm'),
   populationByYear: (() => {
     const r = {};
     for (const row of populationByYear) r[row.year] = row.total_pop;

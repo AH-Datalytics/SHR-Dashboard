@@ -331,6 +331,7 @@
         </span>
       </h3>
       <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+      <div id="trend-footnote" style="text-align:right;font-size:0.7rem;color:var(--muted);margin-top:4px;display:none;">*2021: NIBRS Transition, May Be Incomplete</div>
     </div>
   </div>
 
@@ -742,7 +743,7 @@ function render() {
 
   // ── Trend data (VICTIMS) ──
   let trendLabel = 'Victims';
-  const canMonthly = (isAllStates && isAllAgencies && f.type === 'ALL') || (isConsistent && f.type === 'ALL');
+  const canMonthly = (isAllStates && isAllAgencies) || isConsistent;
   const isMonthly = f.resolution === 'month' && canMonthly;
   const isRolling = f.resolution === 'rolling12' && canMonthly;
 
@@ -805,7 +806,11 @@ function render() {
   let monthlyLabels, monthlyVictimData, monthlyTooltips, rollingData;
   if (isMonthly || isRolling) {
     const mAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const monthSrc = isConsistent ? CS.byMonth : (DATA.byMonthVictims || DATA.byMonth);
+    let monthSrc;
+    if (isConsistent) monthSrc = CS.byMonth;
+    else if (f.type === 'Murder') monthSrc = DATA.byMonthVictimsMurder || DATA.byMonthVictims;
+    else if (f.type === 'Manslaughter') monthSrc = DATA.byMonthVictimsManslaughter || DATA.byMonthVictims;
+    else monthSrc = DATA.byMonthVictims || DATA.byMonth;
     // Find last month with data in the max year
     const maxY = years[years.length - 1];
     let lastMonth = 12;
@@ -974,6 +979,53 @@ function render() {
   const pctChgColors = usePctChg ? trendData.map(v => v == null ? '#ccc' : v >= 0 ? COLORS.red + 'CC' : COLORS.green + 'CC') : null;
   const pctChgHover = usePctChg ? trendData.map(v => v == null ? '#ccc' : v >= 0 ? COLORS.red : COLORS.green) : null;
 
+  // 2021 shading: gray bars for yearly, gray band for monthly/rolling
+  const has2021 = trendLabels.includes(2021) || trendLabels.includes('2021');
+  document.getElementById('trend-footnote').style.display = has2021 ? 'block' : 'none';
+
+  // Build per-bar colors with 2021 grayed out (for non-pctchg bar charts)
+  const GRAY_2021 = '#9ca3af';
+  let barColors, barHoverColors;
+  if (!usePctChg && !useLineChart) {
+    barColors = trendLabels.map(l => String(l) === '2021' ? GRAY_2021 + 'CC' : COLORS.accent + 'CC');
+    barHoverColors = trendLabels.map(l => String(l) === '2021' ? GRAY_2021 : COLORS.accent);
+  }
+  // For pctchg, override 2021 to gray
+  if (usePctChg) {
+    trendLabels.forEach((l, i) => {
+      if (String(l) === '2021') {
+        pctChgColors[i] = GRAY_2021 + 'CC';
+        pctChgHover[i] = GRAY_2021;
+      }
+    });
+  }
+
+  // Chart.js plugin: draw gray vertical band behind 2021 months (for line charts)
+  const nibrs2021Plugin = {
+    id: 'nibrs2021',
+    beforeDraw(chart) {
+      if (!useLineChart || !has2021) return;
+      const { ctx, chartArea, scales: { x } } = chart;
+      // Find first and last index of 2021 in monthlyTooltips
+      let first = -1, last = -1;
+      if (monthlyTooltips) {
+        monthlyTooltips.forEach((t, i) => {
+          if (t && t.endsWith('2021')) {
+            if (first < 0) first = i;
+            last = i;
+          }
+        });
+      }
+      if (first < 0) return;
+      const x1 = x.getPixelForValue(first) - (x.getPixelForValue(1) - x.getPixelForValue(0)) / 2;
+      const x2 = x.getPixelForValue(last) + (x.getPixelForValue(1) - x.getPixelForValue(0)) / 2;
+      ctx.save();
+      ctx.fillStyle = 'rgba(156,163,175,0.15)';
+      ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+      ctx.restore();
+    }
+  };
+
   let dsLabel;
   if (usePctChg) dsLabel = f.rate === 'pctchg_rate' ? 'YoY % Change (Rate)' : 'YoY % Change';
   else if (useRate && canRate) dsLabel = isRolling ? 'Rolling 12-Mo Rate per 100K' : 'Rate per 100K';
@@ -1000,13 +1052,14 @@ function render() {
           pointHoverRadius: 4,
           spanGaps: true,
         } : {
-          backgroundColor: COLORS.accent + 'CC',
-          hoverBackgroundColor: COLORS.accent,
+          backgroundColor: barColors,
+          hoverBackgroundColor: barHoverColors,
           borderRadius: 3,
           borderSkipped: false,
         })
       }]
     },
+    plugins: [nibrs2021Plugin],
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
