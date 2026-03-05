@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FBI Supplementary Homicide Report Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f8f9fa;
+    --surface2: #e9ecef;
+    --border: #dee2e6;
+    --text: #212529;
+    --muted: #6c757d;
+    --accent: #4f46e5;
+    --accent2: #6366f1;
+    --red: #dc2626;
+    --green: #16a34a;
+    --yellow: #ca8a04;
+    --blue: #2563eb;
+    --orange: #ea580c;
+    --cyan: #0891b2;
+    --pink: #db2777;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 0;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header h1 span { color: var(--accent); }
+  .meta {
+    display: flex;
+    gap: 20px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .meta b { color: var(--text); }
+  .container { max-width: 1440px; margin: 0 auto; padding: 20px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .control-group label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  select, input[type=range] {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    outline: none;
+  }
+  select:focus { border-color: var(--accent); }
+  .btn-group {
+    display: inline-flex;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .btn-group button {
+    background: var(--surface2);
+    color: var(--muted);
+    border: none;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-group button:not(:last-child) { border-right: 1px solid var(--border); }
+  .btn-group button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-group button:hover:not(.active) { background: var(--border); color: var(--text); }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .card.full { grid-column: 1 / -1; }
+  .card h3 {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+  .card h3 small { color: var(--muted); font-weight: 400; font-size: 0.75rem; }
+  .chart-wrap { position: relative; width: 100%; }
+  .export-btns { display: inline-flex; gap: 4px; margin-left: auto; }
+  .export-btns button {
+    background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 7px; font-size: 0.65rem; cursor: pointer;
+    font-weight: 500; transition: all 0.15s;
+  }
+  .export-btns button:hover { background: var(--border); color: var(--text); }
+  .stat-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .stat-card .label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .stat-card .change {
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+  .change.up { color: var(--red); }
+  .change.down { color: var(--green); }
+  .table-wrap {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  th, td { padding: 6px 10px; text-align: left; }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td { border-top: 1px solid var(--border); }
+  tr:hover td { background: var(--surface2); }
+  .text-right { text-align: right; }
+  .bar-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: width 0.3s;
+  }
+  .source-note {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+  .agency-item {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .agency-item:hover, .agency-item.highlighted {
+    background: var(--accent);
+    color: #fff;
+  }
+  .agency-item .agency-count {
+    color: var(--muted);
+    font-size: 0.7rem;
+    float: right;
+  }
+  .agency-item:hover .agency-count, .agency-item.highlighted .agency-count {
+    color: rgba(255,255,255,0.7);
+  }
+  @media (max-width: 900px) {
+    .grid, .grid-3 { grid-template-columns: 1fr; }
+    .stat-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>FBI</span> Supplementary Homicide Report Dashboard</h1>
+  <div class="meta">
+    <span>Incidents: <b id="hdr-incidents">—</b></span>
+    <span>Victims: <b id="hdr-victims">—</b></span>
+    <span>Coverage: <b id="hdr-years">—</b></span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group">
+      <label>Year Range:</label>
+      <select id="yearFrom"></select>
+      <span style="color:var(--muted)">to</span>
+      <select id="yearTo"></select>
+    </div>
+    <div class="control-group">
+      <label>State:</label>
+      <select id="stateFilter">
+        <option value="ALL">All States</option>
+      </select>
+    </div>
+    <div class="control-group" style="position:relative;">
+      <label>Agency:</label>
+      <input type="text" id="agencySearch" placeholder="All Agencies" autocomplete="off"
+        style="width:260px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:0.8rem;outline:none;">
+      <input type="hidden" id="agencyFilter" value="ALL">
+      <div id="agencyDropdown" style="display:none;position:absolute;top:100%;left:36px;width:340px;max-height:300px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:6px;z-index:100;margin-top:2px;"></div>
+    </div>
+    <div class="control-group">
+      <label>Type:</label>
+      <div class="btn-group" id="typeFilter">
+        <button class="active" data-v="ALL">All</button>
+        <button data-v="Murder">Murder</button>
+        <button data-v="Manslaughter">Manslaughter</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Sample:</label>
+      <div class="btn-group" id="sampleFilter">
+        <button class="active" data-v="all">All Agencies</button>
+        <button data-v="consistent" title="258 agencies reporting 1+ homicide every year 1986–2025 (55 missing only 2021 with inferred data)">Consistent Sample</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="value" id="stat-total">—</div>
+      <div class="label">Total Incidents (Filtered)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-victims">—</div>
+      <div class="label">Total Victims (Filtered)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-peak-year">—</div>
+      <div class="label">Peak Year</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-firearm-pct">—</div>
+      <div class="label">Firearm %</div>
+    </div>
+  </div>
+
+  <!-- Row 1: Trend + Weapon -->
+  <div class="grid">
+    <div class="card full">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;">
+        <span><span id="trend-title">Annual Trend</span> <small id="trend-subtitle"></small></span>
+        <span style="display:flex;gap:8px;align-items:center;">
+          <span class="btn-group" id="trendRes">
+            <button class="active" data-v="year">Year</button>
+            <button data-v="month">Month</button>
+            <button data-v="rolling12">Rolling 12-Mo</button>
+          </span>
+          <span class="btn-group" id="trendLag" style="display:none;">
+            <button class="active" data-v="complete">Complete</button>
+            <button data-v="lag" title="Exclude last 3 months to account for reporting lag">4-Mo Lag</button>
+          </span>
+          <span class="btn-group" id="trendRate">
+            <button class="active" data-v="count">Count</button>
+            <button data-v="rate" title="Victims per 100,000 reporting population">Rate</button>
+          </span>
+        </span>
+      </h3>
+      <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>By Weapon Type</h3>
+      <div class="chart-wrap"><canvas id="chart-weapon"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>By Circumstance</h3>
+      <div class="chart-wrap"><canvas id="chart-circ"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Victim Sex</h3>
+      <div class="chart-wrap"><canvas id="chart-vsex"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Victim Race</h3>
+      <div class="chart-wrap"><canvas id="chart-vrace"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Victim Age Group</h3>
+      <div class="chart-wrap"><canvas id="chart-vage"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Victim-Offender Relationship</h3>
+      <div class="chart-wrap"><canvas id="chart-rel"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card full">
+      <h3>% of Murders Committed with a Firearm <small id="firearm-pct-subtitle"></small></h3>
+      <div class="chart-wrap"><canvas id="chart-firearm-pct"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Weapon Trend Over Time</h3>
+      <div class="chart-wrap"><canvas id="chart-weapon-trend"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Monthly Seasonality</h3>
+      <div class="chart-wrap"><canvas id="chart-month"></canvas></div>
+    </div>
+  </div>
+
+  <!-- State Rankings Table -->
+  <div class="grid">
+    <div class="card full">
+      <h3>State Rankings</h3>
+      <div class="table-wrap">
+        <table id="state-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>State</th>
+              <th class="text-right">Incidents</th>
+              <th>Distribution</th>
+              <th class="text-right">Firearm % (Murders)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Agencies -->
+  <div class="grid">
+    <div class="card full">
+      <h3>Top Reporting Agencies</h3>
+      <div class="table-wrap">
+        <table id="agency-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Agency</th>
+              <th>State</th>
+              <th class="text-right">Total Incidents</th>
+              <th>Distribution</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="source-note">
+    Source: FBI Supplementary Homicide Report (SHR) Master Files, 1976&ndash;2026<br>
+    Downloaded from the FBI Crime Data Explorer. Dashboard generated <span id="gen-date"></span>.
+  </div>
+</div>
+
+<script>
+// ── Globals ──
+let DATA = null;
+const CHARTS = {};
+const COLORS = {
+  accent: '#6366f1', accent2: '#818cf8',
+  red: '#ef4444', green: '#22c55e', yellow: '#eab308',
+  blue: '#3b82f6', orange: '#f97316', cyan: '#06b6d4',
+  pink: '#ec4899', purple: '#a855f7', teal: '#14b8a6',
+  lime: '#84cc16', amber: '#f59e0b', rose: '#f43f5e',
+};
+const PALETTE = [COLORS.accent, COLORS.red, COLORS.green, COLORS.yellow,
+  COLORS.blue, COLORS.orange, COLORS.cyan, COLORS.pink,
+  COLORS.purple, COLORS.teal, COLORS.lime, COLORS.amber, COLORS.rose];
+
+Chart.defaults.color = '#6c757d';
+Chart.defaults.borderColor = '#dee2e6';
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+Chart.defaults.plugins.legend.labels.padding = 10;
+
+// ── Helpers ──
+function fmt(n) { return n != null ? n.toLocaleString() : '—'; }
+function pct(n, d) { return d ? ((n / d) * 100).toFixed(1) + '%' : '—'; }
+
+function sumRange(obj, yearFrom, yearTo) {
+  let total = 0;
+  for (let y = yearFrom; y <= yearTo; y++) total += (obj[y] || 0);
+  return total;
+}
+
+function getYearArray(obj, years) {
+  return years.map(y => obj[y] || 0);
+}
+
+function downloadChartCSV(id) {
+  const chart = CHARTS[id];
+  if (!chart) return;
+  const labels = chart.data.labels || [];
+  const datasets = chart.data.datasets || [];
+  const header = ['Label', ...datasets.map(ds => ds.label || 'Value')];
+  const rows = labels.map((lbl, i) => [
+    lbl, ...datasets.map(ds => ds.data[i] != null ? ds.data[i] : '')
+  ]);
+  const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = id + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadChartJPEG(id) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  // Draw white background behind chart
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = canvas.width;
+  tmpCanvas.height = canvas.height;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.fillStyle = '#ffffff';
+  tmpCtx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+  tmpCtx.drawImage(canvas, 0, 0);
+  const a = document.createElement('a');
+  a.href = tmpCanvas.toDataURL('image/jpeg', 0.95);
+  a.download = id + '.jpg';
+  a.click();
+}
+
+function makeChart(id, config) {
+  if (CHARTS[id]) CHARTS[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  CHARTS[id] = new Chart(ctx, config);
+  // Auto-inject export buttons into parent card
+  const card = document.getElementById(id).closest('.card');
+  if (card && !card.querySelector('.export-btns')) {
+    const h3 = card.querySelector('h3');
+    if (h3) {
+      const wrap = document.createElement('span');
+      wrap.className = 'export-btns';
+      wrap.innerHTML = `<button onclick="downloadChartCSV('${id}')">CSV</button><button onclick="downloadChartJPEG('${id}')">JPEG</button>`;
+      // If h3 already has flex children (like the trend chart), append inside the last flex child
+      const existingBtnSpan = h3.querySelector('span > .btn-group')?.parentElement;
+      if (existingBtnSpan) {
+        existingBtnSpan.appendChild(wrap);
+      } else {
+        h3.style.display = 'flex';
+        h3.style.alignItems = 'center';
+        h3.style.gap = '8px';
+        h3.appendChild(wrap);
+      }
+    }
+  }
+  return CHARTS[id];
+}
+
+// Common tooltip config
+const TOOLTIP_OPTS = {
+  backgroundColor: '#212529',
+  borderColor: '#495057',
+  borderWidth: 1,
+  titleColor: '#ffffff',
+  bodyColor: '#ffffff',
+  padding: 10,
+  cornerRadius: 6,
+  displayColors: true,
+};
+
+// ── Build UI ──
+function populateControls() {
+  const years = DATA.years;
+  const fromSel = document.getElementById('yearFrom');
+  const toSel = document.getElementById('yearTo');
+  years.forEach(y => {
+    fromSel.add(new Option(y, y));
+    toSel.add(new Option(y, y));
+  });
+  fromSel.value = years[0];
+  toSel.value = years[years.length - 1];
+
+  const stateSel = document.getElementById('stateFilter');
+  const states = Object.keys(DATA.byState).sort();
+  states.forEach(s => stateSel.add(new Option(s, s)));
+
+  // Agency searchable combo
+  setupAgencyCombo();
+
+  fromSel.onchange = toSel.onchange = render;
+  stateSel.onchange = () => {
+    // Reset agency when state changes
+    document.getElementById('agencyFilter').value = 'ALL';
+    document.getElementById('agencySearch').value = '';
+    render();
+  };
+
+  document.querySelectorAll('#typeFilter button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#typeFilter button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    };
+  });
+
+  document.querySelectorAll('#trendRes button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#trendRes button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    };
+  });
+
+  document.querySelectorAll('#sampleFilter button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#sampleFilter button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    };
+  });
+
+  document.querySelectorAll('#trendLag button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#trendLag button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    };
+  });
+
+  document.querySelectorAll('#trendRate button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#trendRate button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    };
+  });
+}
+
+function setupAgencyCombo() {
+  const input = document.getElementById('agencySearch');
+  const hidden = document.getElementById('agencyFilter');
+  const dropdown = document.getElementById('agencyDropdown');
+  let highlightIdx = -1;
+
+  function getFilteredAgencies(query) {
+    const state = document.getElementById('stateFilter').value;
+    let agencies = DATA.agencyList
+      .filter(a => state === 'ALL' || a.s === state)
+      .sort((a, b) => b.n - a.n);
+    if (query) {
+      const q = query.toLowerCase();
+      agencies = agencies.filter(a =>
+        a.a.toLowerCase().includes(q) || a.s.toLowerCase().includes(q)
+      );
+    }
+    return agencies.slice(0, 80);
+  }
+
+  function showDropdown(query) {
+    const agencies = getFilteredAgencies(query);
+    const state = document.getElementById('stateFilter').value;
+    highlightIdx = -1;
+    let html = '<div class="agency-item" data-ori="ALL">All Agencies</div>';
+    agencies.forEach(a => {
+      const label = state === 'ALL' ? `${a.a} (${a.s})` : a.a;
+      html += `<div class="agency-item" data-ori="${a.o}">${label}<span class="agency-count">${fmt(a.n)}</span></div>`;
+    });
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'block';
+
+    dropdown.querySelectorAll('.agency-item').forEach(el => {
+      el.onmousedown = (e) => {
+        e.preventDefault();
+        selectAgency(el.dataset.ori, el.textContent.replace(/[\d,]+$/, '').trim());
+      };
+    });
+  }
+
+  function selectAgency(ori, label) {
+    hidden.value = ori;
+    input.value = ori === 'ALL' ? '' : label;
+    dropdown.style.display = 'none';
+    render();
+  }
+
+  input.onfocus = () => showDropdown(input.value);
+  input.oninput = () => showDropdown(input.value);
+  input.onblur = () => {
+    setTimeout(() => { dropdown.style.display = 'none'; }, 150);
+  };
+  input.onkeydown = (e) => {
+    const items = dropdown.querySelectorAll('.agency-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('highlighted', i === highlightIdx));
+      if (items[highlightIdx]) items[highlightIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlightIdx = Math.max(highlightIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('highlighted', i === highlightIdx));
+      if (items[highlightIdx]) items[highlightIdx].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightIdx >= 0 && items[highlightIdx]) {
+        const el = items[highlightIdx];
+        selectAgency(el.dataset.ori, el.textContent.replace(/[\d,]+$/, '').trim());
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+      input.blur();
+    }
+  };
+}
+
+function getFilters() {
+  return {
+    yearFrom: +document.getElementById('yearFrom').value,
+    yearTo: +document.getElementById('yearTo').value,
+    state: document.getElementById('stateFilter').value,
+    agency: document.getElementById('agencyFilter').value,
+    type: document.querySelector('#typeFilter button.active').dataset.v,
+    resolution: document.querySelector('#trendRes button.active').dataset.v,
+    sample: document.querySelector('#sampleFilter button.active').dataset.v,
+    lag: document.querySelector('#trendLag button.active').dataset.v,
+    rate: document.querySelector('#trendRate button.active').dataset.v,
+  };
+}
+
+function getFilteredYears(f) {
+  return DATA.years.filter(y => y >= f.yearFrom && y <= f.yearTo);
+}
+
+function sumDim(dimMap, years) {
+  const result = {};
+  for (const [key, yearObj] of Object.entries(dimMap)) {
+    let total = 0;
+    for (const y of years) total += (yearObj[y] || 0);
+    if (total > 0) result[key] = total;
+  }
+  return result;
+}
+
+function sortedEntries(obj) {
+  return Object.entries(obj).sort((a, b) => b[1] - a[1]);
+}
+
+// ── Render ──
+function render() {
+  const f = getFilters();
+  const years = getFilteredYears(f);
+  const isAllStates = f.state === 'ALL';
+  const isAllAgencies = f.agency === 'ALL';
+  const hasAgency = !isAllAgencies && DATA.byAgency[f.agency];
+  const isConsistent = f.sample === 'consistent';
+  const CS = DATA.consistent; // shorthand
+
+  // Disable state/agency when consistent sample active (type filter stays enabled)
+  document.getElementById('stateFilter').disabled = isConsistent;
+  document.getElementById('agencySearch').disabled = isConsistent;
+
+  // Header
+  document.getElementById('hdr-incidents').textContent = fmt(DATA.meta.totalIncidents);
+  document.getElementById('hdr-victims').textContent = fmt(DATA.meta.totalVictims);
+  document.getElementById('hdr-years').textContent = `${DATA.meta.minYear}–${DATA.meta.maxYear}`;
+  document.getElementById('gen-date').textContent = new Date(DATA.meta.generated).toLocaleDateString();
+
+  // ── Trend data (VICTIMS) ──
+  let trendLabel = 'Victims';
+  const canMonthly = (isAllStates && isAllAgencies && f.type === 'ALL') || (isConsistent && f.type === 'ALL');
+  const isMonthly = f.resolution === 'month' && canMonthly;
+  const isRolling = f.resolution === 'rolling12' && canMonthly;
+
+  // Disable monthly/rolling buttons when filters active
+  document.querySelectorAll('#trendRes button:not([data-v="year"])').forEach(btn => {
+    btn.disabled = !canMonthly;
+    btn.style.opacity = canMonthly ? '1' : '0.5';
+    btn.style.cursor = canMonthly ? 'pointer' : 'not-allowed';
+  });
+  // Show/hide lag toggle
+  document.getElementById('trendLag').style.display = (isMonthly || isRolling) ? 'inline-flex' : 'none';
+  const useLag = (isMonthly || isRolling) && f.lag === 'lag';
+  const useRate = f.rate === 'rate';
+
+  // Rate mode: disable when state/agency filter active (no per-agency population breakdown in rate data)
+  const canRate = isAllStates && isAllAgencies && f.type === 'ALL' || isConsistent;
+  document.querySelectorAll('#trendRate button[data-v="rate"]').forEach(btn => {
+    btn.disabled = !canRate;
+    btn.style.opacity = canRate ? '1' : '0.5';
+    btn.style.cursor = canRate ? 'pointer' : 'not-allowed';
+  });
+  const popSource = isConsistent ? (CS.populationByYear || {}) : (DATA.populationByYear || {});
+
+  document.getElementById('trend-title').textContent =
+    isRolling ? 'Rolling 12-Month Trend' : isMonthly ? 'Monthly Trend' : 'Annual Trend';
+
+  // Yearly victim data (always computed for stats)
+  let yearlyVictimData;
+  if (isConsistent && f.type !== 'ALL') {
+    const typeMap = CS.byHomicideTypeVictims?.[f.type] || {};
+    yearlyVictimData = years.map(y => typeMap[y] || 0);
+    trendLabel = `Consistent Sample (${CS.count} agencies) — ${f.type}`;
+  } else if (isConsistent) {
+    yearlyVictimData = years.map(y => {
+      const row = CS.byYear.find(r => r.y === y);
+      return row ? row.v : 0;
+    });
+    trendLabel = `Consistent Sample (${CS.count} agencies)`;
+  } else if (hasAgency) {
+    const agMap = DATA.byAgencyVictims?.[f.agency] || DATA.byAgency[f.agency] || {};
+    yearlyVictimData = years.map(y => agMap[y] || 0);
+    const agInfo = DATA.agencyList.find(a => a.o === f.agency);
+    trendLabel = agInfo ? agInfo.a : 'Agency';
+  } else if (f.type !== 'ALL' && isAllStates) {
+    const typeMap = DATA.byHomicideTypeVictims?.[f.type] || DATA.byHomicideType[f.type] || {};
+    yearlyVictimData = years.map(y => typeMap[y] || 0);
+  } else if (!isAllStates) {
+    const stMap = DATA.byStateVictims?.[f.state] || DATA.byState[f.state] || {};
+    yearlyVictimData = years.map(y => stMap[y] || 0);
+  } else {
+    yearlyVictimData = years.map(y => {
+      const row = DATA.byYear.find(r => r.y === y);
+      return row ? row.v : 0;
+    });
+  }
+
+  // Monthly victim data (national or consistent sample)
+  let monthlyLabels, monthlyVictimData, monthlyTooltips, rollingData;
+  if (isMonthly || isRolling) {
+    const mAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthSrc = isConsistent ? CS.byMonth : (DATA.byMonthVictims || DATA.byMonth);
+    // Find last month with data in the max year
+    const maxY = years[years.length - 1];
+    let lastMonth = 12;
+    for (let m = 12; m >= 1; m--) {
+      const mMap = monthSrc[m] || {};
+      if (mMap[maxY] && mMap[maxY] > 0) { lastMonth = m; break; }
+    }
+    // Apply 4-month lag: exclude last 3 completed months
+    let cutoffYear = maxY, cutoffMonth = lastMonth;
+    if (useLag) {
+      cutoffMonth -= 3;
+      if (cutoffMonth < 1) { cutoffMonth += 12; cutoffYear--; }
+    }
+    monthlyLabels = [];
+    monthlyVictimData = [];
+    monthlyTooltips = [];
+    for (const y of years) {
+      if (useLag && y > cutoffYear) break;
+      const mEnd = (y === cutoffYear) ? cutoffMonth : (y === maxY) ? lastMonth : 12;
+      for (let m = 1; m <= mEnd; m++) {
+        monthlyLabels.push(m === 1 ? String(y) : '');
+        monthlyTooltips.push(mAbbr[m - 1] + ' ' + y);
+        const mMap = monthSrc[m] || {};
+        monthlyVictimData.push(mMap[y] || 0);
+      }
+    }
+    // Rolling 12-month sum
+    if (isRolling) {
+      rollingData = monthlyVictimData.map((_, i) => {
+        if (i < 11) return null;
+        let sum = 0;
+        for (let j = i - 11; j <= i; j++) sum += monthlyVictimData[j];
+        return sum;
+      });
+    }
+  }
+
+  const trendLabels = (isMonthly || isRolling) ? monthlyLabels : years;
+  let trendData = isRolling ? rollingData : isMonthly ? monthlyVictimData : yearlyVictimData;
+
+  // Rate conversion: victims per 100,000 reporting population
+  if (useRate && canRate) {
+    if (isMonthly || isRolling) {
+      // For monthly/rolling: use the year's population for each month data point
+      // Build a parallel array of year for each monthly point
+      const monthlyYears = [];
+      for (const y of years) {
+        const maxY = years[years.length - 1];
+        const mEnd = (y === maxY) ? (() => {
+          const monthSrc = isConsistent ? CS.byMonth : (DATA.byMonthVictims || DATA.byMonth);
+          for (let m = 12; m >= 1; m--) { if ((monthSrc[m] || {})[maxY]) return m; }
+          return 12;
+        })() : 12;
+        for (let m = 1; m <= mEnd; m++) monthlyYears.push(y);
+      }
+      // Apply lag truncation to monthlyYears array too
+      const mYears = monthlyYears.slice(0, trendData.length);
+      trendData = trendData.map((v, i) => {
+        if (v == null) return null;
+        const pop = popSource[mYears[i]];
+        if (!pop) return null;
+        return isRolling
+          ? +((v / pop) * 100000).toFixed(2)
+          : +((v / (pop / 12)) * 100000).toFixed(2);
+      });
+    } else {
+      // Yearly: divide by that year's population
+      trendData = trendData.map((v, i) => {
+        const pop = popSource[years[i]];
+        if (!pop) return null;
+        return +((v / pop) * 100000).toFixed(2);
+      });
+    }
+  }
+
+  const victimTotal = yearlyVictimData.reduce((s, v) => s + v, 0);
+  const peakIdx = yearlyVictimData.indexOf(Math.max(...yearlyVictimData));
+  const peakYear = years[peakIdx];
+
+  // Incident count for stat card
+  let incidentTotal;
+  if (isConsistent && f.type !== 'ALL') {
+    // Use byHomicideTypeVictims as proxy for incident count (victims ≈ incidents for type filter)
+    const typeMap = CS.byHomicideTypeVictims?.[f.type] || {};
+    incidentTotal = years.reduce((s, y) => s + (typeMap[y] || 0), 0);
+  } else if (isConsistent) {
+    incidentTotal = CS.byYear.filter(r => r.y >= f.yearFrom && r.y <= f.yearTo)
+      .reduce((s, r) => s + r.i, 0);
+  } else if (hasAgency) {
+    const agMap = DATA.byAgency[f.agency] || {};
+    incidentTotal = years.reduce((s, y) => s + (agMap[y] || 0), 0);
+  } else if (f.type !== 'ALL' && isAllStates) {
+    const typeMap = DATA.byHomicideType[f.type] || {};
+    incidentTotal = years.reduce((s, y) => s + (typeMap[y] || 0), 0);
+  } else if (!isAllStates) {
+    const stMap = DATA.byState[f.state] || {};
+    incidentTotal = years.reduce((s, y) => s + (stMap[y] || 0), 0);
+  } else {
+    incidentTotal = DATA.byYear.filter(r => r.y >= f.yearFrom && r.y <= f.yearTo)
+      .reduce((s, r) => s + r.i, 0);
+  }
+
+  // Firearm % (of all incidents for the stat card)
+  let firearmTotal, allWeaponTotal;
+  if (isConsistent) {
+    firearmTotal = sumRange(CS.byWeaponGroup['Firearm'] || {}, f.yearFrom, f.yearTo);
+    allWeaponTotal = incidentTotal;
+  } else if (hasAgency) {
+    const agW = DATA.byAgencyWeapon[f.agency] || {};
+    firearmTotal = agW['Firearm'] || 0;
+    allWeaponTotal = Object.values(agW).reduce((s, v) => s + v, 0);
+  } else if (!isAllStates) {
+    firearmTotal = DATA.byStateWeapon[f.state]?.['Firearm'] || 0;
+    allWeaponTotal = Object.values(DATA.byStateWeapon[f.state] || {}).reduce((s, v) => s + v, 0);
+  } else {
+    firearmTotal = sumRange(DATA.byWeaponGroup['Firearm'] || {}, f.yearFrom, f.yearTo);
+    allWeaponTotal = incidentTotal;
+  }
+
+  // Build subtitle
+  let subtitle = `${f.yearFrom}–${f.yearTo}`;
+  if (isConsistent) subtitle += ` — Consistent Sample (${CS.count} agencies)`;
+  if (!isAllStates && !isConsistent) subtitle += ` (${f.state})`;
+  if (hasAgency && !isConsistent) {
+    const agInfo = DATA.agencyList.find(a => a.o === f.agency);
+    subtitle += ` — ${agInfo ? agInfo.a : f.agency}`;
+  }
+  if (f.type !== 'ALL') subtitle += ` — ${f.type} only`;
+  if (useLag) subtitle += ' (4-mo lag)';
+  if (useRate && canRate) subtitle += ' — Rate per 100K';
+
+  // Stats
+  document.getElementById('stat-total').textContent = fmt(incidentTotal);
+  document.getElementById('stat-victims').textContent = fmt(victimTotal);
+  document.getElementById('stat-peak-year').textContent = peakYear || '—';
+  document.getElementById('stat-firearm-pct').textContent = pct(firearmTotal, allWeaponTotal);
+  document.getElementById('trend-subtitle').textContent = subtitle;
+
+  // ── Trend chart ──
+  const useLineChart = isMonthly || isRolling;
+  makeChart('chart-trend', {
+    type: useLineChart ? 'line' : 'bar',
+    data: {
+      labels: trendLabels,
+      datasets: [{
+        label: (useRate && canRate) ? (isRolling ? 'Rolling 12-Mo Rate per 100K' : 'Rate per 100K') : (isRolling ? 'Rolling 12-Mo Victims' : trendLabel),
+        data: trendData,
+        ...(useLineChart ? {
+          borderColor: isRolling ? COLORS.red : COLORS.accent,
+          backgroundColor: (isRolling ? COLORS.red : COLORS.accent) + '20',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          spanGaps: true,
+        } : {
+          backgroundColor: COLORS.accent + 'CC',
+          hoverBackgroundColor: COLORS.accent,
+          borderRadius: 3,
+          borderSkipped: false,
+        })
+      }]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            title: ctx => {
+              if (useLineChart && monthlyTooltips) {
+                return monthlyTooltips[ctx[0].dataIndex] || ctx[0].label;
+              }
+              return ctx[0].label;
+            },
+            label: ctx => {
+              if (ctx.parsed.y == null) return null;
+              if (useRate && canRate) {
+                return isRolling
+                  ? ` ${ctx.parsed.y.toFixed(1)} per 100K (trailing 12 months)`
+                  : ` ${ctx.parsed.y.toFixed(1)} per 100K`;
+              }
+              return isRolling
+                ? ` ${fmt(ctx.parsed.y)} victims (trailing 12 months)`
+                : ` ${fmt(ctx.parsed.y)} victims`;
+            },
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => (useRate && canRate) ? v.toFixed(1) : fmt(v) } },
+        x: { ticks: { maxTicksLimit: useLineChart ? 40 : 25, maxRotation: 0 } }
+      }
+    }
+  });
+
+  // ── Firearm % of Murders trend ──
+  let firearmPctData;
+  let firearmPctSubtitle = `${f.yearFrom}–${f.yearTo}`;
+  if (isConsistent) {
+    firearmPctData = years.map(y => {
+      const row = CS.firearmPct.find(r => r.y === y);
+      return row ? row.p : null;
+    });
+    firearmPctSubtitle += ' — Consistent Sample';
+  } else if (hasAgency) {
+    const agFmY = DATA.firearmMurderByAgencyYear[f.agency] || {};
+    firearmPctData = years.map(y => {
+      const d = agFmY[y];
+      return d && d.t ? +(d.f / d.t * 100).toFixed(1) : null;
+    });
+    const agInfo = DATA.agencyList.find(a => a.o === f.agency);
+    firearmPctSubtitle += agInfo ? ` — ${agInfo.a}` : '';
+  } else if (!isAllStates) {
+    const stFm = DATA.firearmMurderByStateYear[f.state] || {};
+    firearmPctData = years.map(y => {
+      const d = stFm[y];
+      return d && d.t ? +(d.f / d.t * 100).toFixed(1) : null;
+    });
+    firearmPctSubtitle += ` (${f.state})`;
+  } else {
+    firearmPctData = years.map(y => {
+      const row = DATA.firearmMurderPct.find(r => r.y === y);
+      return row ? row.p : null;
+    });
+  }
+  document.getElementById('firearm-pct-subtitle').textContent = firearmPctSubtitle;
+
+  if (firearmPctData) {
+    makeChart('chart-firearm-pct', {
+      type: 'line',
+      data: {
+        labels: years,
+        datasets: [{
+          label: '% Firearm',
+          data: firearmPctData,
+          borderColor: COLORS.red,
+          backgroundColor: COLORS.red + '20',
+          fill: true,
+          tension: 0.3,
+          pointRadius: years.length > 25 ? 2 : 4,
+          pointHoverRadius: 6,
+          spanGaps: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...TOOLTIP_OPTS,
+            callbacks: {
+              title: ctx => ctx[0].label,
+              label: ctx => ` ${ctx.parsed.y}% of murders by firearm`,
+            }
+          }
+        },
+        scales: {
+          y: { min: 0, max: 100, ticks: { callback: v => v + '%' } },
+          x: { ticks: { maxTicksLimit: 20 } }
+        }
+      }
+    });
+  } else {
+    // Show a placeholder
+    makeChart('chart-firearm-pct', {
+      type: 'bar',
+      data: { labels: [], datasets: [{ data: [] }] },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+
+  // ── Weapon breakdown (bar) ──
+  let weaponData;
+  if (isConsistent) {
+    weaponData = sumDim(CS.byWeaponGroup, years);
+  } else if (hasAgency) {
+    weaponData = DATA.byAgencyWeapon[f.agency] || {};
+  } else if (!isAllStates) {
+    weaponData = DATA.byStateWeapon[f.state] || {};
+  } else {
+    weaponData = sumDim(DATA.byWeaponGroup, years);
+  }
+  const weaponSorted = sortedEntries(weaponData);
+  makeChart('chart-weapon', {
+    type: 'bar',
+    data: {
+      labels: weaponSorted.map(e => e[0]),
+      datasets: [{
+        data: weaponSorted.map(e => e[1]),
+        backgroundColor: PALETTE.slice(0, weaponSorted.length),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${fmt(ctx.parsed.x)} (${pct(ctx.parsed.x, total)})`;
+            }
+          }
+        }
+      },
+      scales: { x: { ticks: { callback: v => fmt(v) } } }
+    }
+  });
+
+  // ── Circumstance (bar) ──
+  const circData = sumDim(isConsistent ? CS.byCircGroup : DATA.byCircGroup, years);
+  const circSorted = sortedEntries(circData);
+  makeChart('chart-circ', {
+    type: 'bar',
+    data: {
+      labels: circSorted.map(e => e[0]),
+      datasets: [{
+        data: circSorted.map(e => e[1]),
+        backgroundColor: PALETTE.slice(0, circSorted.length),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${fmt(ctx.parsed.x)} (${pct(ctx.parsed.x, total)})`;
+            }
+          }
+        }
+      },
+      scales: { x: { ticks: { callback: v => fmt(v) } } }
+    }
+  });
+
+  // ── Victim Sex (doughnut) ──
+  const sexData = sumDim(isConsistent ? CS.byVictimSex : DATA.byVictimSex, years);
+  const sexFiltered = Object.entries(sexData).filter(e => e[0] !== 'Unknown');
+  makeChart('chart-vsex', {
+    type: 'doughnut',
+    data: {
+      labels: sexFiltered.map(e => e[0]),
+      datasets: [{
+        data: sexFiltered.map(e => e[1]),
+        backgroundColor: [COLORS.blue, COLORS.pink],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${ctx.label}: ${fmt(ctx.parsed)} (${pct(ctx.parsed, total)})`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Victim Race (doughnut) ──
+  const raceData = isConsistent
+    ? sumDim(CS.byVictimRace, years)
+    : isAllStates
+      ? sumDim(DATA.byVictimRace, years)
+      : (DATA.byStateVictimRace[f.state] || {});
+  const raceFiltered = sortedEntries(raceData).filter(e => e[0] !== 'Unknown');
+  makeChart('chart-vrace', {
+    type: 'doughnut',
+    data: {
+      labels: raceFiltered.map(e => e[0]),
+      datasets: [{
+        data: raceFiltered.map(e => e[1]),
+        backgroundColor: [COLORS.blue, COLORS.orange, COLORS.green, COLORS.yellow, COLORS.purple],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${ctx.label}: ${fmt(ctx.parsed)} (${pct(ctx.parsed, total)})`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Victim Age Group (bar) ──
+  const ageData = sumDim(isConsistent ? CS.byVictimAge : DATA.byVictimAge, years);
+  const ageOrder = ['Infant (<1)', 'Child (1-11)', 'Teen (12-17)', 'Young Adult (18-24)',
+    '25-34', '35-44', '45-54', '55-64', '65+', 'Unknown'];
+  const ageSorted = ageOrder.filter(k => ageData[k]).map(k => [k, ageData[k]]);
+  makeChart('chart-vage', {
+    type: 'bar',
+    data: {
+      labels: ageSorted.map(e => e[0]),
+      datasets: [{
+        data: ageSorted.map(e => e[1]),
+        backgroundColor: PALETTE.slice(0, ageSorted.length),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${fmt(ctx.parsed.y)} (${pct(ctx.parsed.y, total)})`;
+            }
+          }
+        }
+      },
+      scales: { y: { ticks: { callback: v => fmt(v) } } }
+    }
+  });
+
+  // ── Relationship (bar) ──
+  const relData = sumDim(isConsistent ? CS.byRelGroup : DATA.byRelGroup, years);
+  const relSorted = sortedEntries(relData);
+  makeChart('chart-rel', {
+    type: 'bar',
+    data: {
+      labels: relSorted.map(e => e[0]),
+      datasets: [{
+        data: relSorted.map(e => e[1]),
+        backgroundColor: [COLORS.red, COLORS.orange, COLORS.blue, COLORS.muted],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => {
+              const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+              return ` ${fmt(ctx.parsed.y)} (${pct(ctx.parsed.y, total)})`;
+            }
+          }
+        }
+      },
+      scales: { y: { ticks: { callback: v => fmt(v) } } }
+    }
+  });
+
+  // ── Weapon Trend (stacked area) ──
+  const weaponGroups = ['Firearm', 'Knife/Cutting', 'Blunt Object', 'Personal Weapons', 'Strangulation', 'Other'];
+  const weaponColors = [COLORS.red, COLORS.blue, COLORS.orange, COLORS.green, COLORS.pink, COLORS.muted];
+  makeChart('chart-weapon-trend', {
+    type: 'line',
+    data: {
+      labels: years,
+      datasets: weaponGroups.map((g, i) => ({
+        label: g,
+        data: getYearArray((isConsistent ? CS.byWeaponGroup : DATA.byWeaponGroup)[g] || {}, years),
+        borderColor: weaponColors[i],
+        backgroundColor: weaponColors[i] + '30',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      }))
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
+          }
+        }
+      },
+      scales: {
+        y: { stacked: true, ticks: { callback: v => fmt(v) } },
+        x: { ticks: { maxTicksLimit: 20 } }
+      }
+    }
+  });
+
+  // ── Monthly Seasonality (bar) ──
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthData = monthNames.map((_, i) => {
+    const m = i + 1;
+    const mMap = DATA.byMonth[m] || {};
+    return years.reduce((s, y) => s + (mMap[y] || 0), 0);
+  });
+  makeChart('chart-month', {
+    type: 'bar',
+    data: {
+      labels: monthNames,
+      datasets: [{
+        data: monthData,
+        backgroundColor: monthData.map(v => {
+          const max = Math.max(...monthData);
+          const min = Math.min(...monthData);
+          const p = max > min ? (v - min) / (max - min) : 0;
+          return p > 0.7 ? COLORS.red : p > 0.3 ? COLORS.orange : COLORS.blue;
+        }),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_OPTS,
+          callbacks: {
+            label: ctx => ` ${fmt(ctx.parsed.y)} incidents`,
+          }
+        }
+      },
+      scales: { y: { ticks: { callback: v => fmt(v) } } }
+    }
+  });
+
+  // ── State Rankings Table ──
+  const stateRows = [];
+  const allStates = Object.keys(DATA.byState).sort();
+  for (const st of allStates) {
+    const stMap = DATA.byState[st];
+    let total = 0;
+    for (const y of years) total += (stMap[y] || 0);
+    if (total === 0) continue;
+    const fm = DATA.firearmMurderByState[st];
+    stateRows.push({ state: st, total, firearmMurderPct: fm ? fm.p : 0 });
+  }
+  stateRows.sort((a, b) => b.total - a.total);
+  const maxStateTotal = stateRows[0]?.total || 1;
+
+  const stBody = document.querySelector('#state-table tbody');
+  stBody.innerHTML = stateRows.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${r.state}</td>
+      <td class="text-right">${fmt(r.total)}</td>
+      <td><div class="bar-cell"><div class="bar" style="width:${(r.total/maxStateTotal*100).toFixed(1)}%"></div></div></td>
+      <td class="text-right">${r.firearmMurderPct.toFixed(1)}%</td>
+    </tr>
+  `).join('');
+
+  // ── Top Agencies Table ──
+  const maxAgency = DATA.topAgencies[0]?.total || 1;
+  const agBody = document.querySelector('#agency-table tbody');
+  agBody.innerHTML = DATA.topAgencies.slice(0, 50).map((r, i) => {
+    const fm = DATA.firearmMurderByAgency[r.ori];
+    return `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${r.agency}</td>
+      <td>${r.state}</td>
+      <td class="text-right">${fmt(r.total)}</td>
+      <td><div class="bar-cell"><div class="bar" style="width:${(r.total/maxAgency*100).toFixed(1)}%"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Load Data ──
+fetch('data/shr-aggregated.json')
+  .then(r => r.json())
+  .then(data => {
+    DATA = data;
+    populateControls();
+    render();
+  })
+  .catch(err => {
+    document.querySelector('.container').innerHTML =
+      '<div style="padding:40px;text-align:center;color:var(--red)">Error loading data: ' + err.message + '</div>';
+  });
+</script>
+</body>
+</html>
