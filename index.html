@@ -843,8 +843,15 @@ function render() {
     }
   }
 
-  const trendLabels = (isMonthly || isRolling) ? monthlyLabels : years;
-  let trendData = isRolling ? rollingData : isMonthly ? monthlyVictimData : yearlyVictimData;
+  let trendLabels = (isMonthly || isRolling) ? monthlyLabels : years.slice();
+  let trendData = isRolling ? rollingData : isMonthly ? monthlyVictimData : yearlyVictimData.slice();
+
+  // Exclude incomplete current year for annual rate and % change views
+  const curYear = new Date().getFullYear();
+  if ((useRate || usePctChg) && !(isMonthly || isRolling) && years[years.length - 1] >= curYear) {
+    trendData = trendData.slice(0, -1);
+    trendLabels = trendLabels.slice(0, -1);
+  }
 
   // Rate conversion: victims per 100,000 reporting population
   if (useRate && canRate) {
